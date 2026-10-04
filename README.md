@@ -24,6 +24,23 @@ The cutting engine groups pieces by nominal size and uses a greedy packing heuri
 
 Hardware quantities are initial allowances. Verify actual lumber dimensions, joints, connector specifications, exposure, intended loads, and any applicable building requirements before buying or cutting. No roof spans, footings, structural load ratings, or code compliance are calculated.
 
+## GitHub Pages
+
+The app has a client-only build for GitHub Pages. Its project path is `/lumber-plan/`.
+
+1. Open repository **Settings → Pages**.
+2. Under **Build and deployment**, set **Source** to **GitHub Actions**.
+3. Run the **Deploy LumberPlan to GitHub Pages** workflow from the Actions tab if the first run happened before Pages was enabled. Future pushes to `main` publish automatically.
+
+Once deployment succeeds, open **https://mattsimoto.github.io/lumber-plan/**.
+
+```sh
+pnpm build:pages
+pnpm preview:pages
+```
+
+The static output is written to `dist-pages/`. This build uses the same workbench and calculation code as the hosted version. It needs no API key or server. Photo references and project saving remain local to each browser.
+
 ## Local development
 
 Requires Node.js 22.13 or later and pnpm. The dependency lockfile is committed.
