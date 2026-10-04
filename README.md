@@ -10,7 +10,7 @@ LumberPlan turns project dimensions and component lists into a lumber shopping l
 - Shopping quantities grouped by lumber size and stock length.
 - Visual per-board cutting layouts and remaining offcuts.
 - Initial hardware allowances and layout assumptions.
-- Local photo and PDF references.
+- Photo and PDF uploads with an AI analysis request and editable review flow (requires a server-side API credential).
 - CSV export, browser printing, and project recovery on the same browser/device.
 - Responsive layout for desktop and mobile.
 
@@ -18,7 +18,9 @@ LumberPlan turns project dimensions and component lists into a lumber shopping l
 
 This is a working materials-planning foundation, not an automatic blueprint interpreter or an engineered construction design.
 
-Uploaded photos and PDFs are references only. They remain in the browser and are not uploaded to a server or retained after a reload. Description matching suggests one of the three templates; it does not extract dimensions. Enter and confirm dimensions manually.
+Uploads remain local until you click **Analyze reference**. Analysis sends the reference and project details through the authenticated backend to OpenAI. Generated components are proposals: missing dimensions remain blank, and every included size, length and quantity must be confirmed before the list can be applied. The template suggestion button still uses simple keyword matching.
+
+**Activation status:** the analysis implementation is present, but a server-side `OPENAI_API_KEY` has not yet been configured. It returns a clear setup message without calling the provider until that credential is supplied. See [AI analysis setup](docs/AI_ANALYSIS.md).
 
 The cutting engine groups pieces by nominal size and uses a greedy packing heuristic that accounts for kerf between cuts. It does not guarantee a global minimum board count or lowest purchase cost. End trimming, defects, grain direction, and angled-cut geometry are not automatically accounted for. Optional spare boards are separate from the minimum cutting plan.
 
@@ -39,7 +41,7 @@ pnpm build:pages
 pnpm preview:pages
 ```
 
-The static output is written to `dist-pages/`. This build uses the same workbench and calculation code as the hosted version. It needs no API key or server. Photo references and project saving remain local to each browser.
+The static output is written to `dist-pages/`. This build uses the same workbench and calculation code as the hosted version. The materials calculator needs no server. AI analysis uses a separate authenticated backend; no provider key is included in the GitHub Pages build. Project saving remains local to each browser.
 
 ## Local development
 
@@ -74,8 +76,8 @@ The project uses React, TypeScript, and Vinext with a Cloudflare Workers build. 
 
 ## Next milestone
 
-Connect AI interpretation for descriptions, drawings, photos, and blueprints. Present extracted dimensions, inferred members, missing details, and assumptions for user confirmation before creating a materials plan. Keep measured facts distinct from estimates, particularly for hidden components and joints.
+Configure the backend AI credential and run a real labeled drawing/photo/PDF evaluation. The integration, input validation, and component review are implemented; provider calls have only been tested with mocked responses so far. Verify accuracy against known builds before treating generated lists as purchasing plans.
 
 ## Project storage
 
-Project inputs and component lists are saved in this browser's local storage. There are no user accounts or cross-device project synchronization yet. Avoid treating browser storage as your only copy; export a CSV for a permanent materials record.
+Project inputs, applied analysis notes and component lists are saved in this browser's local storage. Uploaded file bytes are not saved there. There are no user accounts or cross-device project synchronization yet. Avoid treating browser storage as your only copy; export a CSV for a permanent materials record.

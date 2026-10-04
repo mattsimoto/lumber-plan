@@ -27,6 +27,8 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Check types
         run: pnpm exec tsc --noEmit
+      - name: Verify analysis API behavior
+        run: pnpm test:analysis
       - name: Build static site
         run: pnpm build:pages
       - name: Configure Pages
