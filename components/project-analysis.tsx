@@ -4,6 +4,7 @@ import { Sparkles, X, Check } from 'lucide-react';
 import { Analysis, LUMBER_SIZES } from '../lib/analysis-contract';
 import { startAnalysis } from '../lib/analysis-client';
 import { draftDefaults, draftReport, type DraftLayout } from '../lib/local-analysis';
+import DimensionInputs from './dimension-inputs';
 import { Piece, uid } from '../lib/planner';
 
 type Row=Analysis['components'][number]&{include:boolean};
@@ -42,7 +43,8 @@ export default function ProjectAnalysis({file,description,onApply}:{file:File|nu
     <h3>{result.draftLayout?'Adjust this starting design':'Create a starting design'}</h3>
     <p className="hint">{result.draftLayout?'The photo suggested this structure type. Parts and numbers below come from a standard layout, not measurements of the image.':'Choose a matching layout to generate a draft. This is a manual fallback, not a detected result. Custom structures need individual part details.'}</p>
     <label>Starting layout<select value={layout} onChange={e=>{const kind=e.target.value as DraftLayout;setLayout(kind);setDims(draftDefaults[kind]);setConfirmed(false)}}><option value="bench">Simple backless bench</option><option value="planter">Open-bottom raised bed</option><option value="shelf">Freestanding shelving</option></select></label>
-    <div className="review-fields">{(['width','depth','height'] as const).map(key=><label key={key}>{key==='width'?'Length':key==='depth'?'Depth':'Height'} (in)<input type="number" min="8" max="192" step=".25" value={dims[key]} onChange={e=>{setDims({...dims,[key]:Number(e.target.value)});setConfirmed(false)}}/></label>)}{layout==='shelf'&&<label>Shelf levels<input type="number" min="1" max="10" value={dims.shelves} onChange={e=>{setDims({...dims,shelves:Number(e.target.value)});setConfirmed(false)}}/></label>}</div>
+    <DimensionInputs dimensions={(['width','depth','height'] as const).map(key=>({label:key==='width'?'Length':key==='depth'?'Depth':'Height',value:dims[key],onChange:(value:number)=>{setDims(previous=>({...previous,[key]:value}));setConfirmed(false)}}))}/>
+    {layout==='shelf'&&<label>Shelf levels<input type="number" min="1" max="10" value={dims.shelves} onChange={e=>{setDims({...dims,shelves:Number(e.target.value)});setConfirmed(false)}}/></label>}
     <button className="secondary" onClick={rebuild}>Recalculate draft parts</button><small>Recalculating replaces the reviewed rows below.</small>{draftError&&<p className="error" role="alert">{draftError}</p>}
    </div>}
    {result.sourceText&&<details><summary>Recognized text</summary><pre className="recognized-text">{result.sourceText}</pre></details>}

@@ -9,3 +9,5 @@ button:disabled{opacity:.5;cursor:not-allowed}.project-analysis{border-top:1px s
 
 .photo-draft{padding:1rem;border:1px solid var(--border);border-radius:12px;margin:1rem 0;background:var(--muted)}
 .photo-draft small{display:block;margin-top:.5rem}
+
+.dimension-editor{margin:12px 0}.dimension-rows{display:grid;gap:10px;margin-top:12px}.dimension-row{display:grid;grid-template-columns:64px minmax(0,1fr);gap:10px;align-items:center;font-size:13px;font-weight:600}.dimension-values{display:flex;gap:8px;min-width:0}.dimension-values .unit-input{flex:1;min-width:0;margin:0}.dimension-values input{min-width:0;width:100%;padding-right:26px}.dimension-values .unit-input span{right:8px}
