@@ -6,7 +6,7 @@ const PDFJS='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.mjs';
 const PDF_WORKER='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.mjs';
 type OCRWorker={recognize:(image:Blob)=>Promise<{data:{text:string}}>;terminate:()=>Promise<unknown>};
 function imageUrl(blob:Blob):Promise<string>{return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=()=>reject(new Error('Could not read this image.'));reader.readAsDataURL(blob)})}
-export function startAnalysis(file:File|null,description:string,onStatus:(text:string)=>void,options:LocalAnalysisOptions={mode:'drawing',page:1}):{promise:Promise<Analysis>;cancel:()=>void}{
+export function startAnalysis(file:File|null,description:string,onStatus:(text:string)=>void,options:LocalAnalysisOptions={mode:'photo',page:1}):{promise:Promise<Analysis>;cancel:()=>void}{
  let canceled=false;let ocr:OCRWorker|null=null;let vision:Worker|null=null;let rejectPending:(e:Error)=>void=()=>{};let cleanupPdf:undefined|(()=>Promise<unknown>);
  const check=()=>{if(canceled)throw new Error('Analysis canceled.')};
  const promise=new Promise<Analysis>((resolve,reject)=>{rejectPending=reject;(async()=>{
@@ -38,7 +38,7 @@ export function startAnalysis(file:File|null,description:string,onStatus:(text:s
    await cleanupPdf();cleanupPdf=undefined;
   }
   check();
-  if(recognized.trim().length<15){
+  if(options.mode==='drawing'&&recognized.trim().length<15){
    onStatus('Loading free text recognition…');
    try{
     const {default:Tesseract}=await import(/* @vite-ignore */ TESSERACT);check();
@@ -49,8 +49,7 @@ export function startAnalysis(file:File|null,description:string,onStatus:(text:s
   }
   check();
   if(options.mode==='photo'){
-   if(!('gpu' in navigator)){notes.push('This browser has no WebGPU support. Only text recognition was used.');}
-   else try{
+   try{
     const data=await imageUrl(image);check();
     observation=await new Promise<string>((done,fail)=>{
      vision=new Worker(new URL('./local-vision.worker.js',window.location.href),{type:'module'});
@@ -58,7 +57,7 @@ export function startAnalysis(file:File|null,description:string,onStatus:(text:s
      vision.onerror=()=>fail(new Error('The local photo model could not load.'));
      vision.postMessage({image:data});
     });
-   }catch(e){check();notes.push(`Photo understanding unavailable: ${e instanceof Error?e.message:'model could not run'}. Text recognition results are still shown.`)}
+   }catch(e){check();notes.push(`Photo understanding unavailable: ${e instanceof Error?e.message:'model could not run'}. Choose a starter layout below to continue, or try a smaller image on another device.`)}
   }
   check();return localReport(description,recognized,observation,notes.join(' '));
  })().then(result=>{if(!canceled)resolve(result)}).catch(e=>{if(!canceled)reject(e)}).finally(()=>{vision?.terminate();ocr?.terminate();cleanupPdf?.()})});

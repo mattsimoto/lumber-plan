@@ -18,7 +18,7 @@ LumberPlan turns project dimensions and component lists into a lumber shopping l
 
 No API keys, inference fees, backend or sign-in are required. Select **Read drawing text** for local OCR and PDF text extraction, or **Understand photo** for an optional local vision model. Uploads stay in the browser. The browser downloads the libraries and models on first use.
 
-Photo mode needs WebGPU and a download of several hundred MB. Devices without WebGPU retain drawing-text recognition. The local model suggests visible part groups; exact dimensions and quantities must come from the drawing or your measurements. Read [local analysis details](docs/AI_ANALYSIS.md) for limits, dependencies and verification status.
+Photo mode downloads several hundred MB and uses WebGPU when available, with a slower CPU fallback. It suggests visible part groups and offers standard-layout drafts for benches, raised beds and shelving. Draft dimensions and counts are assumptions to review, not measurements from the photo. Read [local analysis details](docs/AI_ANALYSIS.md) for limits, dependencies and verification status.
 
 ## Important limits
 
@@ -81,3 +81,8 @@ Evaluate the local OCR and vision workflow on real labeled drawings and photos a
 ## Project storage
 
 Project inputs, applied analysis notes and component lists are saved in this browser's local storage. Uploaded file bytes are not saved there. There are no user accounts or cross-device project synchronization yet. Avoid treating browser storage as your only copy; export a CSV for a permanent materials record.
+
+### Photo-to-plan drafts
+Image uploads now default to visual analysis. A recognized bench, raised bed or shelving unit produces a standard-layout draft with explicit assumed dimensions, components and hardware allowances. Adjust dimensions in the review and recalculate, then accept the draft to generate the buy list and cut layout. This is not an exact reconstruction of arbitrary photos. Explicit component rows retain their supplied measurements. Unsupported or unrecognized structures retain unresolved parts and offer an explicitly manual starter-layout fallback.
+
+Photo inference tries WebGPU or single-threaded CPU/WASM when no GPU adapter is available. CPU inference can take several minutes or exceed a phone's memory. First use downloads model weights. Real-device inference still needs testing.

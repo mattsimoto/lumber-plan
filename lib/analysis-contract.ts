@@ -3,6 +3,8 @@ import { z } from 'zod';
 export const LUMBER_SIZES = ['1×2','1×4','1×6','2×2','2×4','2×6','2×8','2×10','2×12','4×4','6×6'] as const;
 export const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
 export const analysisSchema = z.object({
+  draftLayout: z.enum(['bench','planter','shelf']).optional(),
+  draftDimensions: z.object({width:z.number().positive(),depth:z.number().positive(),height:z.number().positive(),shelves:z.number().int().positive()}).optional(),
   sourceText: z.string().max(24000).optional(),
   title: z.string().min(1).max(200),
   summary: z.string().max(2500),

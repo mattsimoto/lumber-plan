@@ -14,9 +14,9 @@ Cross rails, 2x4, 18 1/2 in, qty 3
 
 The parser accepts labeled inches, feet, millimeters, centimeters and meters. Bare numbers without a unit remain unresolved. It does not infer arbitrary framing schedules or reconstruct blueprint geometry. OCR output is displayed for checking.
 
-**Understand photo** also runs SmolVLM-500M-Instruct through Transformers.js on WebGPU. It produces a short unverified visual description and suggests common component groups such as legs, posts, rails, braces, shelves and seat boards. Model-generated measurements and counts are deliberately discarded. Fill these in from real measurements before applying the list.
+**Photo** runs SmolVLM-500M-Instruct through Transformers.js on WebGPU or CPU/WASM. It produces a short unverified visual description and suggests common component groups such as legs, posts, rails, braces, shelves and seat boards. Model-generated measurements and counts are deliberately discarded. Supported structure types generate standard-layout draft parts with explicit assumed dimensions; other parts retain missing values for review.
 
-Photo mode needs a compatible WebGPU browser/device and downloads several hundred MB on first use. Files are cached by the browser where supported. Performance and memory requirements vary; a model that loads on a desktop may fail on a phone. If photo understanding is unavailable, the app returns the text-recognition results with an explicit explanation. It does not call a paid API as a fallback.
+Photo mode prefers WebGPU and downloads several hundred MB on first use. It uses single-threaded CPU/WASM when no GPU adapter is available. Files are cached by the browser where supported. Performance and memory requirements vary; a model that loads on a desktop may fail on a phone. If photo understanding is unavailable, the app explains the failure and offers a manual starter-layout choice. It does not call a paid API as a fallback.
 
 ## Files and privacy
 
@@ -46,3 +46,9 @@ pnpm build:pages
 The local tests cover component text parsing, fractions, unit conversion, missing quantities, and exclusion of measurements/counts invented by photo-model output. Build verification checks both static and hosted versions. Runtime library endpoints and model artifact availability are checked separately.
 
 A real on-device GPU inference and OCR browser session still need confirmation on the target hardware. Image understanding remains experimental; no structural adequacy or verified hardware design is calculated.
+
+## Photo draft update
+
+Photos default to visual analysis; PDFs default to drawing text extraction. Recognized benches, planters and shelving can become editable standard-layout drafts. Default dimensions are assumptions, never dimensions inferred from a photo. Draft labels persist in the results and CSV assumptions. Explicitly supplied component rows are not replaced by a starter draft. Unsupported structures need manual component measurements; manual template selection is always labeled as a fallback.
+
+A missing WebGPU adapter now selects single-threaded CPU/WASM inference using q4 weights. This is slower and remains subject to device memory limits. A failed analysis returns a visible explanation and starter-layout controls. On-device model execution is not covered by the parser/unit tests.
