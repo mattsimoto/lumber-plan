@@ -10,21 +10,21 @@ LumberPlan turns project dimensions and component lists into a lumber shopping l
 - Shopping quantities grouped by lumber size and stock length.
 - Visual per-board cutting layouts and remaining offcuts.
 - Initial hardware allowances and layout assumptions.
-- Photo and PDF uploads with an AI analysis request and editable review flow (requires a server-side API credential).
+- Photo and PDF uploads with free local text extraction, optional browser vision and an editable review flow.
 - CSV export, browser printing, and project recovery on the same browser/device.
 - Responsive layout for desktop and mobile.
 
+## Free on-device analysis
+
+No API keys, inference fees, backend or sign-in are required. Select **Read drawing text** for local OCR and PDF text extraction, or **Understand photo** for an optional local vision model. Uploads stay in the browser. The browser downloads the libraries and models on first use.
+
+Photo mode needs WebGPU and a download of several hundred MB. Devices without WebGPU retain drawing-text recognition. The local model suggests visible part groups; exact dimensions and quantities must come from the drawing or your measurements. Read [local analysis details](docs/AI_ANALYSIS.md) for limits, dependencies and verification status.
+
 ## Important limits
 
-This is a working materials-planning foundation, not an automatic blueprint interpreter or an engineered construction design.
+This is a materials-planning aid, not an engineered construction design. OCR can misread labels, and the small vision model can miss or misidentify members. Confirm every imported value. Text parsing handles explicit rows such as `4 legs, 2x4, 36 in`; it does not reconstruct arbitrary blueprint geometry. PDFs are analyzed one selected page at a time.
 
-Uploads remain local until you click **Analyze reference**. Analysis sends the reference and project details through the authenticated backend to OpenAI. Generated components are proposals: missing dimensions remain blank, and every included size, length and quantity must be confirmed before the list can be applied. The template suggestion button still uses simple keyword matching.
-
-**Activation status:** the analysis implementation is present, but a server-side `OPENAI_API_KEY` has not yet been configured. It returns a clear setup message without calling the provider until that credential is supplied. See [AI analysis setup](docs/AI_ANALYSIS.md).
-
-The cutting engine groups pieces by nominal size and uses a greedy packing heuristic that accounts for kerf between cuts. It does not guarantee a global minimum board count or lowest purchase cost. End trimming, defects, grain direction, and angled-cut geometry are not automatically accounted for. Optional spare boards are separate from the minimum cutting plan.
-
-Hardware quantities are initial allowances. Verify actual lumber dimensions, joints, connector specifications, exposure, intended loads, and any applicable building requirements before buying or cutting. No roof spans, footings, structural load ratings, or code compliance are calculated.
+The cut engine uses greedy packing with saw kerf. It does not guarantee a global minimum board count or purchase cost. End trimming, defects, grain direction and angled-cut geometry are not automatically included. Hardware notes are provisional and do not establish connection strength.
 
 ## GitHub Pages
 
@@ -41,7 +41,7 @@ pnpm build:pages
 pnpm preview:pages
 ```
 
-The static output is written to `dist-pages/`. This build uses the same workbench and calculation code as the hosted version. The materials calculator needs no server. AI analysis uses a separate authenticated backend; no provider key is included in the GitHub Pages build. Project saving remains local to each browser.
+The static output is written to `dist-pages/`. This build uses the same workbench and calculation code as the hosted version. Both the calculator and local analysis run in the browser. No backend or provider key is used. Project saving remains local to each browser.
 
 ## Local development
 
@@ -76,7 +76,7 @@ The project uses React, TypeScript, and Vinext with a Cloudflare Workers build. 
 
 ## Next milestone
 
-Configure the backend AI credential and run a real labeled drawing/photo/PDF evaluation. The integration, input validation, and component review are implemented; provider calls have only been tested with mocked responses so far. Verify accuracy against known builds before treating generated lists as purchasing plans.
+Evaluate the local OCR and vision workflow on real labeled drawings and photos across desktop and mobile hardware. Improve part recognition while keeping measured information distinct from model suggestions.
 
 ## Project storage
 

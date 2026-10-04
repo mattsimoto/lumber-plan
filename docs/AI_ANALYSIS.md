@@ -1,38 +1,39 @@
-# AI analysis setup
+# Free local analysis
 
-## Current status
+LumberPlan uses open-source tools in the browser. No inference API, API key, paid provider, backend service, sign-in window or model-hosting account is required.
 
-The image/PDF/description integration is implemented. Live analysis remains inactive until a server-side AI credential is configured. Tests use mock provider responses; a live provider request and the cross-site sign-in flow have not yet been verified.
+## Modes
 
-## Architecture
+**Read drawing text** uses Tesseract.js to recognize English labels. For PDFs, PDF.js first extracts embedded text from the selected page; OCR handles scanned pages. Explicit component rows are converted into reviewable suggestions, for example:
 
-- GitHub Pages runs the calculator and review UI.
-- Clicking **Analyze reference** opens `/analysis-bridge` on the existing private LumberPlan hosted app.
-- If needed, the hosting platform asks the visitor to sign in.
-- A nonce-bound `postMessage` handshake transfers the input. Both windows check the message origin, sender and request ID. The bridge only accepts the repository owner's GitHub Pages origin.
-- The bridge calls the same-origin `/api/analyze` route. Sites supplies the authenticated user header; unauthenticated and foreign-origin requests are rejected.
-- The server calls OpenAI's Responses API with a strict JSON schema and returns validated components.
-- Users review proposed parts and missing values before replacing the current component list. The provider key never enters the Pages bundle or GitHub repository.
+```text
+4 legs, 2x4, 36 in
+Long rails, 2x4, 48 in, qty 2
+Cross rails, 2x4, 18 1/2 in, qty 3
+```
 
-The bridge currently trusts `https://mattsimoto.github.io` and uses `https://timber-plan.magentaratsbane.chatgpt.site` as the backend. These are configured in `lib/analysis-contract.ts`. Update both if the app origins change. Do not host this API somewhere that trusts user-supplied authentication headers; its authentication boundary is Sites dispatch.
+The parser accepts labeled inches, feet, millimeters, centimeters and meters. Bare numbers without a unit remain unresolved. It does not infer arbitrary framing schedules or reconstruct blueprint geometry. OCR output is displayed for checking.
 
-## Required server configuration
+**Understand photo** also runs SmolVLM-500M-Instruct through Transformers.js on WebGPU. It produces a short unverified visual description and suggests common component groups such as legs, posts, rails, braces, shelves and seat boards. Model-generated measurements and counts are deliberately discarded. Fill these in from real measurements before applying the list.
 
-Set `OPENAI_API_KEY` as a **secret runtime environment variable on the backend Site**, then redeploy that backend. It is not a GitHub Pages build variable and must never use a `VITE_` or `NEXT_PUBLIC_` prefix. Do not commit credentials, insert them in frontend code, or paste them into repository issues.
+Photo mode needs a compatible WebGPU browser/device and downloads several hundred MB on first use. Files are cached by the browser where supported. Performance and memory requirements vary; a model that loads on a desktop may fail on a phone. If photo understanding is unavailable, the app returns the text-recognition results with an explicit explanation. It does not call a paid API as a fallback.
 
-Optional server variable: `OPENAI_VISION_MODEL`. The default is `gpt-4.1`, using image inputs, PDF file inputs and structured output. Confirm model access for the configured API project.
+## Files and privacy
 
-The backend remains private. Visitors need access to the hosted backend to use analysis, even though the calculator on GitHub Pages is public. Enabling a public multi-user AI service requires an appropriate authentication and usage-budget design first.
+The selected file and description are processed on the device. No upload or inference request is sent to an external AI service. The browser downloads open-source libraries, OCR language data and model weights from their public hosts, so first use requires internet access. It is not a guaranteed offline app.
 
-If sign-in severs the popup's opener connection, return to GitHub Pages and click Analyze again after sign-in. The app presents this recovery instruction. Users must allow the analysis window to open.
+Input files are limited to 15 MB. Images are resized to a maximum dimension of 2400 pixels for processing. PDFs are processed one selected page at a time, with the analyzed page stated in the result. The review shows OCR text, assumptions and missing information. Users confirm included component values before replacement of the cut list.
 
-## Request and output behavior
+## Source and licenses
 
-Inputs accept JPG, PNG, WEBP and PDF, up to 15 MB each, with up to 12,000 description characters. Server checks include content type, file signature, base64 size and a bounded request body. One attachment is processed per request. Small legible drawings or individual PDF pages usually provide more useful results than large scans.
+| Tool | Version / model revision | Source | License |
+| --- | --- | --- | --- |
+| Tesseract.js | 6.0.1 | https://github.com/naptha/tesseract.js | Apache-2.0 |
+| PDF.js | 4.10.38 | https://github.com/mozilla/pdf.js | Apache-2.0 |
+| Transformers.js | 3.8.1 | https://github.com/huggingface/transformers.js | Apache-2.0 |
+| SmolVLM-500M-Instruct | a7da5b986cb59b408707209984f360a5f4ad7e47 | https://huggingface.co/HuggingFaceTB/SmolVLM-500M-Instruct | Apache-2.0 |
 
-The prompt requires unresolved values to remain null and flags inferred components. The review prevents applying components with missing size, length or quantity. It asks users to confirm all included values and joints. Unchecked components are excluded, so a partially applied list is not necessarily a complete structure.
-
-Images and text are sent to OpenAI only when the user requests analysis and the backend is configured. Responses use `store: false`; provider data-handling policies still apply. File bytes and raw provider responses are not saved by this app. Applied component and assumption data are saved in browser local storage.
+These dependencies are loaded at runtime rather than copied into this repository. `public/local-vision.worker.js` isolates photo inference from the interface and permits cancellation by terminating the worker. The Tesseract API pattern and Transformers model usage follow the upstream documentation and examples.
 
 ## Verification
 
@@ -40,9 +41,8 @@ Images and text are sent to OpenAI only when the user requests analysis and the 
 pnpm test:analysis
 pnpm exec tsc --noEmit
 pnpm build:pages
-pnpm build
 ```
 
-The API tests cover authentication, origin rejection, absent credentials, unknown measurements, malformed uploads, image/PDF request construction, provider refusal, invalid structured output and upstream errors. They do not make paid API calls.
+The local tests cover component text parsing, fractions, unit conversion, missing quantities, and exclusion of measurements/counts invented by photo-model output. Build verification checks both static and hosted versions. Runtime library endpoints and model artifact availability are checked separately.
 
-After configuration, verify a labeled drawing, an unscaled photo (which should ask for measurements), and a one-page PDF from the GitHub Pages app. Confirm sign-in, return of results, editing, cancellation, applying the list, and persistence. No API credential should appear in generated assets, local storage, browser request bodies or Git history.
+A real on-device GPU inference and OCR browser session still need confirmation on the target hardware. Image understanding remains experimental; no structural adequacy or verified hardware design is calculated.

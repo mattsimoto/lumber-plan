@@ -1,39 +1,66 @@
-import { ANALYSIS_ORIGIN, analysisSchema, type Analysis, type AnalysisInput, MAX_UPLOAD_BYTES } from './analysis-contract';
-
-async function inputFromFile(file:File|null,description:string):Promise<AnalysisInput>{
- if(!file)return {description};
- if(file.size>MAX_UPLOAD_BYTES)throw new Error('Use a file smaller than 15 MB.');
- const data=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=()=>reject(new Error('The file could not be read.'));reader.readAsDataURL(file)});
- return {description,file:{name:file.name,type:file.type,data}};
-}
-export async function requestAnalysis(input:AnalysisInput,signal?:AbortSignal):Promise<Analysis>{
- const response=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(input),signal});
- if(!response.headers.get('content-type')?.includes('application/json'))throw new Error('Sign in to the analysis window and try again.');
- const data=await response.json() as {error?:unknown;analysis?:unknown};if(!response.ok)throw new Error(typeof data.error==='string'?data.error:'Analysis failed. Please try again.');
- return analysisSchema.parse(data.analysis);
-}
-export function startAnalysis(file:File|null,description:string,onStatus:(text:string)=>void):{promise:Promise<Analysis>;cancel:()=>void}{
- const controller=new AbortController();let cancel=()=>controller.abort();
- if(window.location.origin===ANALYSIS_ORIGIN||window.location.hostname==='localhost'||window.location.hostname==='terminal.local'){
-  return {promise:inputFromFile(file,description).then(input=>requestAnalysis(input,controller.signal)),cancel};
- }
- const job=crypto.randomUUID();
- const popup=window.open(`${ANALYSIS_ORIGIN}/analysis-bridge#${job}`,'lumberplan-analysis','popup,width=580,height=640');
- if(!popup)return {promise:Promise.reject(new Error('Allow the analysis window to open, then try again.')),cancel};
- const promise=new Promise<Analysis>((resolve,reject)=>{
-  let sent=false;let done=false;let timeout:ReturnType<typeof setTimeout>;let poll:ReturnType<typeof setInterval>;
-  const finish=(error?:Error,result?:Analysis)=>{if(done)return;done=true;clearTimeout(timeout);clearInterval(poll);window.removeEventListener('message',receive);popup.close();if(error)reject(error);else if(result)resolve(result)};
-  const receive=async(event:MessageEvent)=>{
-   if(event.origin!==ANALYSIS_ORIGIN||event.source!==popup||event.data?.job!==job)return;
-   if(event.data.type==='lumberplan-ready'&&!sent){sent=true;onStatus('Reading your reference…');try{const input=await inputFromFile(file,description);if(!done)popup.postMessage({type:'lumberplan-analyze',job,input},ANALYSIS_ORIGIN)}catch(e){finish(e instanceof Error?e:new Error('Unable to read this file.'))}}
-   if(event.data.type==='lumberplan-result'){const parsed=analysisSchema.safeParse(event.data.analysis);if(parsed.success)finish(undefined,parsed.data);else finish(new Error('The analysis was incomplete. Please try again.'))}
-   if(event.data.type==='lumberplan-error')finish(new Error(String(event.data.error||'Analysis failed.')));
-  };
-  window.addEventListener('message',receive);
-  // A nonce-bound handshake works even if sign-in drops the URL fragment.
-  poll=setInterval(()=>{if(popup.closed){finish(new Error('The analysis window was closed. Reopen it to continue.'));return}popup.postMessage({type:'lumberplan-hello',job},ANALYSIS_ORIGIN)},750);
-  timeout=setTimeout(()=>finish(new Error('The analysis window timed out. If you just signed in, please try again.')),180000);
-  cancel=()=>finish(new Error('Analysis canceled.'));
- });
- return {promise,cancel:()=>cancel()};
+import { type Analysis, MAX_UPLOAD_BYTES } from './analysis-contract';
+import { localReport } from './local-analysis';
+export type LocalAnalysisOptions={mode:'drawing'|'photo';page:number};
+const TESSERACT='https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/tesseract.esm.min.js';
+const PDFJS='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.mjs';
+const PDF_WORKER='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.mjs';
+type OCRWorker={recognize:(image:Blob)=>Promise<{data:{text:string}}>;terminate:()=>Promise<unknown>};
+function imageUrl(blob:Blob):Promise<string>{return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=()=>reject(new Error('Could not read this image.'));reader.readAsDataURL(blob)})}
+export function startAnalysis(file:File|null,description:string,onStatus:(text:string)=>void,options:LocalAnalysisOptions={mode:'drawing',page:1}):{promise:Promise<Analysis>;cancel:()=>void}{
+ let canceled=false;let ocr:OCRWorker|null=null;let vision:Worker|null=null;let rejectPending:(e:Error)=>void=()=>{};let cleanupPdf:undefined|(()=>Promise<unknown>);
+ const check=()=>{if(canceled)throw new Error('Analysis canceled.')};
+ const promise=new Promise<Analysis>((resolve,reject)=>{rejectPending=reject;(async()=>{
+  let recognized='';let observation='';const notes:string[]=[];
+  if(!file){return localReport(description,'')}
+  if(file.size>MAX_UPLOAD_BYTES)throw new Error('Use a file under 15 MB.');
+  if(!['image/jpeg','image/png','image/webp','application/pdf'].includes(file.type))throw new Error('Use JPG, PNG, WEBP or PDF.');
+  let image:Blob=file;
+  if(file.type.startsWith('image/')){
+   onStatus('Preparing image on your device…');
+   const bitmap=await createImageBitmap(file);check();
+   const scale=Math.min(1,2400/Math.max(bitmap.width,bitmap.height));
+   if(scale<1){const canvas=document.createElement('canvas');canvas.width=Math.round(bitmap.width*scale);canvas.height=Math.round(bitmap.height*scale);const context=canvas.getContext('2d');if(!context){bitmap.close();throw new Error('This browser cannot prepare the image.')};context.drawImage(bitmap,0,0,canvas.width,canvas.height);image=await new Promise<Blob>((done,fail)=>canvas.toBlob(b=>b?done(b):fail(new Error('Could not resize this image.')),'image/png'));canvas.width=canvas.height=0}
+   bitmap.close();
+  }
+  if(file.type==='application/pdf'){
+   onStatus(`Reading PDF page ${options.page} on your device…`);
+   const pdfjs=await import(/* @vite-ignore */ PDFJS);check();pdfjs.GlobalWorkerOptions.workerSrc=PDF_WORKER;
+   const task=pdfjs.getDocument({data:await file.arrayBuffer(),isEvalSupported:false});cleanupPdf=()=>task.destroy();
+   const pdf=await task.promise;check();if(options.page<1||options.page>pdf.numPages)throw new Error(`This PDF has ${pdf.numPages} pages. Choose a page from 1 to ${pdf.numPages}.`);
+   const page=await pdf.getPage(options.page);const content=await page.getTextContent();
+   recognized=content.items.map((item:{str?:string;hasEOL?:boolean})=>(item.str??'')+(item.hasEOL?'\n':' ')).join('');
+   const initial=page.getViewport({scale:1});const viewport=page.getViewport({scale:Math.min(2,2400/Math.max(initial.width,initial.height))});
+   const canvas=document.createElement('canvas');canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);
+   const context=canvas.getContext('2d');if(!context)throw new Error('This browser cannot render the PDF.');
+   await page.render({canvasContext:context,viewport}).promise;check();
+   image=await new Promise<Blob>((done,fail)=>canvas.toBlob(b=>b?done(b):fail(new Error('Could not render this PDF page.')),'image/png'));
+   canvas.width=canvas.height=0;notes.push(`Only PDF page ${options.page} of ${pdf.numPages} was analyzed. Other pages are not included.`);
+   await cleanupPdf();cleanupPdf=undefined;
+  }
+  check();
+  if(recognized.trim().length<15){
+   onStatus('Loading free text recognition…');
+   try{
+    const {default:Tesseract}=await import(/* @vite-ignore */ TESSERACT);check();
+    ocr=await Tesseract.createWorker('eng',1,{logger:(p:{status:string;progress?:number})=>{if(!canceled)onStatus(`${p.status} ${Math.round((p.progress??0)*100)}%`)}});check();
+    recognized=(await ocr!.recognize(image)).data.text;
+   }catch(e){check();if(options.mode==='drawing')throw new Error('Text recognition could not load or finish. Check your connection and try a smaller, clearer image.');notes.push('Text recognition was unavailable for this photo.');void e}
+   finally{await ocr?.terminate();ocr=null}
+  }
+  check();
+  if(options.mode==='photo'){
+   if(!('gpu' in navigator)){notes.push('This browser has no WebGPU support. Only text recognition was used.');}
+   else try{
+    const data=await imageUrl(image);check();
+    observation=await new Promise<string>((done,fail)=>{
+     vision=new Worker(new URL('./local-vision.worker.js',window.location.href),{type:'module'});
+     vision.onmessage=event=>{const p=event.data;if(p.type==='status')onStatus(p.text);else if(p.type==='result')done(p.text);else if(p.type==='error')fail(new Error(p.text))};
+     vision.onerror=()=>fail(new Error('The local photo model could not load.'));
+     vision.postMessage({image:data});
+    });
+   }catch(e){check();notes.push(`Photo understanding unavailable: ${e instanceof Error?e.message:'model could not run'}. Text recognition results are still shown.`)}
+  }
+  check();return localReport(description,recognized,observation,notes.join(' '));
+ })().then(result=>{if(!canceled)resolve(result)}).catch(e=>{if(!canceled)reject(e)}).finally(()=>{vision?.terminate();ocr?.terminate();cleanupPdf?.()})});
+ return {promise,cancel:()=>{canceled=true;vision?.terminate();ocr?.terminate();cleanupPdf?.();rejectPending(new Error('Analysis canceled.'))}};
 }
